@@ -4,36 +4,24 @@ import com.alibaba.cloud.ai.dashscope.api.DashScopeApi;
 import com.alibaba.cloud.ai.dashscope.chat.DashScopeChatModel;
 import com.alibaba.cloud.ai.dashscope.chat.DashScopeChatOptions;
 import org.springframework.ai.chat.client.ChatClient;
-import org.springframework.ai.chat.client.advisor.SimpleLoggerAdvisor;
 import org.springframework.ai.ollama.OllamaChatModel;
 import org.springframework.beans.factory.annotation.Qualifier;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 
-/**
- * Multi-LLMs配置 为不同的Agent配置不同的模型
- */
 @Configuration
 public class MultiLLMConfig {
 
-    @Value("${spring.ai.dashscope.api-key}")
-    private String apiKey;
-
     // 模型配置常量 - 默认使用百炼模型
-    private static final String WRITING_MODEL = "qwen3-max";
+    private static final String WRITING_MODEL = "qwen-plus";
     private static final String IMAGE_MODEL = "wan2.5-i2i-preview";
-    private static final String ANALYSIS_MODEL = "qwen-plus";
 
     // 温度参数常量
     private static final double WRITING_TEMPERATURE = 0.6;
-    private static final double CODING_TEMPERATURE = 0.5;
-    private static final double ANALYSIS_TEMPERATURE = 0.4;
+    public static final double IMAGE_TEMPERATURE = 0.6;
 
     // Token限制常量
     private static final int WRITING_MAX_TOKENS = 30000;
-    private static final int CODING_MAX_TOKENS = 6000;
-    private static final int ANALYSIS_MAX_TOKENS = 3000;
 
     /**
      * 文案助手专用模型 - 擅长文案创作和编辑
@@ -53,34 +41,19 @@ public class MultiLLMConfig {
     }
 
     /**
-     * 代码手专用模型 - 擅长代码生成和调试
+     * 图片编辑助手专用模型 - 擅长图片编辑
      */
-    @Bean("codingChatModel")
-    public DashScopeChatModel codingChatModel(DashScopeApi dashScopeApi) {
+    @Bean("imageChatModel")
+    public DashScopeChatModel imageChatModel(DashScopeApi dashScopeApi) {
         return DashScopeChatModel.builder()
                 .dashScopeApi(dashScopeApi)
                 .defaultOptions(DashScopeChatOptions.builder()
                         .withModel(IMAGE_MODEL)
-                        .withTemperature(CODING_TEMPERATURE)
-                        .withMaxToken(CODING_MAX_TOKENS)
+                        .withTemperature(IMAGE_TEMPERATURE)
                         .build())
                 .build();
     }
 
-    /**
-     * 通用分析模型 - 用于数据分析和结果解释
-     */
-    @Bean("analysisChatModel")
-    public DashScopeChatModel analysisChatModel(DashScopeApi dashScopeApi) {
-        return DashScopeChatModel.builder()
-                .dashScopeApi(dashScopeApi)
-                .defaultOptions(DashScopeChatOptions.builder()
-                        .withModel(ANALYSIS_MODEL)
-                        .withTemperature(ANALYSIS_TEMPERATURE)
-                        .withMaxToken(ANALYSIS_MAX_TOKENS)
-                        .build())
-                .build();
-    }
 
     /**
      * 本地模型
@@ -101,10 +74,10 @@ public class MultiLLMConfig {
     }
 
     /**
-     * 通用分析ChatClient
+     * 图片编辑助手专用ChatClient
      */
-    @Bean("analysisChatClient")
-    public ChatClient analysisChatClient(@Qualifier("analysisChatModel") DashScopeChatModel analysisChatModel) {
-        return ChatClient.builder(analysisChatModel).defaultAdvisors(new TokenLoggerAdvisor()).build();
+    @Bean("imageChatClient")
+    public ChatClient imageChatClient(@Qualifier("imageChatModel") DashScopeChatModel imageChatModel) {
+        return ChatClient.builder(imageChatModel).defaultAdvisors(new TokenLoggerAdvisor()).build();
     }
 }

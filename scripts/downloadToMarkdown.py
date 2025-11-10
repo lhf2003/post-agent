@@ -1,4 +1,5 @@
 import argparse
+import io
 import os
 import re
 import sys
@@ -132,6 +133,29 @@ def url_to_markdown(url: str, timeout: int = 20) -> dict:
     return {"title": title, "markdown": final_md}
 
 
+def setup_output_encoding():
+    """设置 stdout 和 stderr 的编码为 UTF-8，避免中文乱码"""
+    try:
+        # 检查当前编码
+        current_encoding = getattr(sys.stdout, "encoding", None)
+        if current_encoding and current_encoding.lower() == "utf-8":
+            return
+
+        # Python 3.7+ 使用 reconfigure
+        if hasattr(sys.stdout, "reconfigure"):
+            sys.stdout.reconfigure(encoding="utf-8")
+            sys.stderr.reconfigure(encoding="utf-8")
+        else:
+            # Python 3.6 及以下，使用 TextIOWrapper 包装
+            if hasattr(sys.stdout, "buffer"):
+                sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding="utf-8", errors="replace")
+            if hasattr(sys.stderr, "buffer"):
+                sys.stderr = io.TextIOWrapper(sys.stderr.buffer, encoding="utf-8", errors="replace")
+    except Exception:
+        # 如果设置失败，静默忽略，避免影响程序运行
+        pass
+
+
 def ensure_dir(path: str) -> None:
     if path and not os.path.exists(path):
         os.makedirs(path, exist_ok=True)
@@ -152,12 +176,15 @@ def save_markdown(title: str, markdown: str, outdir: str) -> str:
 
 
 def main():
+    # 设置输出编码为 UTF-8，避免中文乱码
+    setup_output_encoding()
+
     parser = argparse.ArgumentParser(description="将网页正文下载为统一样式 Markdown")
     parser.add_argument("url", nargs="+", help="要下载的 URL（可多个）")
     # 修改默认输出目录为当前时间格式
     default_outdir = datetime.now().strftime("%Y%m%d_%H%M%S")
     parser.add_argument("-o", "--outdir", default=default_outdir, help=f"输出目录（默认：{default_outdir}）")
-    parser.add_argument("-t", "--timeout", type=int, default=20, help="下载超时秒数（默认：20）")
+    parser.add_argument("-t", "--timeout", type=int, default=60, help="下载超时秒数（默认：20）")
     args = parser.parse_args()
 
     exit_code = 0
@@ -165,9 +192,9 @@ def main():
         try:
             result = url_to_markdown(u, timeout=args.timeout)
             outpath = save_markdown(result["title"], result["markdown"], args.outdir)
-            print(f"OK  -> {u}\nsaved: {outpath}\n")
+            print(f"OK  -> {u}\n保存: {outpath}\n")
         except Exception as e:
-            print(f"FAIL -> {u}\nreason: {e}\n", file=sys.stderr)
+            print(f"FAIL -> {u}\n原因: {e}\n", file=sys.stderr)
             exit_code = 1
     sys.exit(exit_code)
 

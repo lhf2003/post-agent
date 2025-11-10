@@ -16,8 +16,6 @@ import org.springframework.web.client.RestClient;
 
 /**
  * Spring AI Alibaba配置 配置DashScope模型
- *
-
  */
 @Configuration
 public class AIConfig {

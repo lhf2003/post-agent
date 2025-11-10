@@ -22,7 +22,7 @@ public class TokenLoggerAdvisor implements CallAdvisor, StreamAdvisor {
         ChatResponseMetadata metadata = advisedResponse.chatResponse().getMetadata();
         Usage usage = metadata.getUsage();
         log.info("本次模型调用 usage: {}", usage);
-        return null;
+        return advisedResponse;
     }
 
     @Override

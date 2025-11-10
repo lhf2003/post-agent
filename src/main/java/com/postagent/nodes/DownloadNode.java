@@ -36,6 +36,7 @@ public class DownloadNode implements NodeAction {
         log.info("======DownloadNode apply start======");
 
         String collectedUrl = state.value("collectedUrl").get().toString();
+        String collectedTitle = state.value("collectedTitle").get().toString();
         if (!StringUtils.hasText(collectedUrl)) {
             log.info("DownloadNode apply urlList is empty");
             // TODO 错误处理
@@ -53,15 +54,8 @@ public class DownloadNode implements NodeAction {
         }
 
         // 执行python脚本
-        String result = pythonScriptService.executeScript("downloadToMarkdown.py", collectedUrl, List.of("-o", targetDir));
-        // TODO 错误处理
-        if (result.contains("Error")) {
-            throw new IOException("Python script execution failed: " + result);
-        }
-        // 向指定文件写入脚本响应（日志）
-        FileWriter writer = new FileWriter(targetDir + File.separator + "result.log", StandardCharsets.UTF_8, true);
-        writer.write(result);
-        writer.close();
+        pythonScriptService.executeScript("downloadToMarkdown.py", targetDir, collectedUrl, List.of("-o", targetDir));
+
         log.info("\uD83D\uDCD6下载成功");
         log.info("✅下载的.md文件存储路径：{}", targetDir);
         log.info("======DownloadNode apply end======");

@@ -21,7 +21,7 @@ import java.util.regex.Pattern;
 public class PromptService {
 
     // 提示词文件列表
-    private static final String[] PROMPT_FILES = {"prompts/summary-agent-prompt.md", "prompts/common-prompts.md"};
+    private static final String[] PROMPT_FILES = {"prompts/summary-agent-prompt.md"};
 
     private Map<String, String> promptTemplates = new HashMap<>();
 

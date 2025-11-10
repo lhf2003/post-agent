@@ -96,7 +96,7 @@ if __name__ == "__main__":
                         help="标题内容（默认：小红书封面）")
     parser.add_argument("--underline", default=None,
                         help="标题下划线范围，格式：[start,end]，如 [0,2] 表示下标0到2的字符")
-    parser.add_argument("--decor-emoji", default="✨",
+    parser.add_argument("--decor-emoji", default=None,
                         help="装饰emoji表情（可选，如：🎉、✨、💡、🤨等）")
     parser.add_argument("--decor-position", choices=["bottom-left", "bottom-right"], default="bottom-left",
                         help="装饰emoji位置：bottom-left（左下角）或 bottom-right（右下角），默认右下角")

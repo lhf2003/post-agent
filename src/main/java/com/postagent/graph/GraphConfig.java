@@ -72,11 +72,10 @@ public class GraphConfig {
         log.info("小红书笔记工作流开始编译...");
 
         CompiledGraph compiledGraph = stateGraph.compile(CompileConfig.builder().build());
-
         // 设置最大迭代次数
         compiledGraph.setMaxIterations(100);
         // 配置定时任务，每15分钟执行一次
-//        compiledGraph.schedule(ScheduleConfig.builder().cronExpression("0 0/15 * * * ?").build());
+//        compiledGraph.schedule(ScheduleConfig.builder().cronExpression("0 0/5 * * * ?").build());
 
         log.info("小红书笔记工作流编译完成");
         return compiledGraph;

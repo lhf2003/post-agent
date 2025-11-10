@@ -3,7 +3,9 @@ package com.postagent.service;
 import com.alibaba.cloud.ai.graph.CompiledGraph;
 import com.alibaba.cloud.ai.graph.OverAllState;
 import com.postagent.entity.PostTask;
+import com.postagent.entity.PostTaskResult;
 import com.postagent.repository.PostTaskRepository;
+import com.postagent.repository.PostTaskResultRepository;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.data.domain.Pageable;
@@ -18,6 +20,8 @@ import java.util.Optional;
 public class PostTaskService {
     @Autowired
     private PostTaskRepository postTaskRepository;
+    @Autowired
+    private PostTaskResultRepository postTaskResultRepository;
 
     @Autowired
     @Qualifier("compiledPostAgentGraph")
@@ -50,9 +54,13 @@ public class PostTaskService {
         if (result.isPresent()) {
             OverAllState overallState = result.get();
             postTask.setStatus(PostTask.Status.SUCCESS.getValue());
+            postTaskRepository.save(postTask);
+            Long postId = Long.parseLong(overallState.value("postId").get().toString());
+            PostTaskResult postTaskResult = postTaskResultRepository.findByDataId(postId);
+            postTaskResult.setOutputDirectory(overallState.value("targetDir").get().toString());
+            postTaskResultRepository.save(postTaskResult);
         } else {
             postTask.setStatus(PostTask.Status.FAILED.getValue());
         }
-        postTaskRepository.save(postTask);
     }
 }

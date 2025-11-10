@@ -4,16 +4,12 @@ import com.alibaba.cloud.ai.graph.OverAllState;
 import com.alibaba.cloud.ai.graph.action.NodeAction;
 import com.alibaba.fastjson.JSON;
 import com.alibaba.fastjson.JSONObject;
-import com.postagent.entity.PostTask;
 import com.postagent.service.PythonScriptService;
 import jakarta.annotation.Resource;
-import jakarta.json.Json;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
 
-import java.io.File;
-import java.io.FileWriter;
-import java.nio.charset.StandardCharsets;
+import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
@@ -36,6 +32,22 @@ public class TransformNode implements NodeAction {
         String targetDir = state.value("targetDir").get().toString();
 
         JSONObject aiResult = JSON.parseObject(summaryContent);
+        generateCoverImage(aiResult, collectedTitle, targetDir);
+        generateContentImage(aiResult, collectedTitle, targetDir);
+
+        log.info("✅图片存储路径：{}", targetDir);
+        log.info("======transformNode apply end======");
+        return Map.of();
+    }
+
+    /**
+     * 生成封面图片
+     * @param aiResult 包含标题和emoji的json对象
+     * @param collectedTitle 收集到的标题
+     * @param targetDir 目标目录
+     * @throws IOException 生成图片时出现异常
+     */
+    private void generateCoverImage(JSONObject aiResult, String collectedTitle, String targetDir) throws IOException {
         // 拼接命令参数列表
         List<String> argList = new ArrayList<>();
         // 封面标题
@@ -46,20 +58,35 @@ public class TransformNode implements NodeAction {
 //        argList.add("\uD83E\uDD29");
         // 图片名称
         argList.add("--name");
-        argList.add(collectedTitle);
+        argList.add(collectedTitle + "_cover");
         // 输出目录
         argList.add("--out");
         argList.add(targetDir);
 
-        String result = pythonScriptService.executeScript("textTransformToPng.py", "", argList);
+        pythonScriptService.executeScript("textTransformToPng.py", targetDir, "", argList);
+    }
 
-        // 向指定文件写入脚本响应（日志）
-        FileWriter writer = new FileWriter(targetDir + File.separator + "result.log", StandardCharsets.UTF_8, true);
-        writer.write(result);
-        writer.close();
+    /**
+     * 生成内容图片
+     * @param aiResult 包含标题和emoji的json对象
+     * @param collectedTitle 收集到的标题
+     * @param targetDir 目标目录
+     * @throws IOException 生成图片时出现异常
+     */
+    private void generateContentImage(JSONObject aiResult, String collectedTitle, String targetDir) throws IOException {
+        String content = aiResult.getString("summary");
+        // 拼接命令参数列表
+        List<String> argList = new ArrayList<>();
+        // 图片内容
+        argList.add("--content");
+        argList.add(content);
+        // 图片名称
+        argList.add("--name");
+        argList.add(collectedTitle + "_content");
+        // 输出目录
+        argList.add("--out");
+        argList.add(targetDir);
 
-        log.info("✅图片存储路径：{}", targetDir);
-        log.info("======transformNode apply end======");
-        return Map.of();
+        pythonScriptService.executeScript("content_transform.py", targetDir, "", argList);
     }
 }

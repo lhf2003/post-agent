@@ -75,115 +75,80 @@ def measure_content_height(page, html, width=1080, height=1440):
     return content_height
 
 
+def measure_height_for_paragraphs(page, paragraphs):
+    """基于段落列表构建HTML并测量高度（减少重复代码）"""
+    test_html = build_html_from_paragraphs(paragraphs)
+    return measure_content_height(page, test_html)
+
+
 def split_content_to_fit(page, paragraphs, max_height=1240):
     """将段落列表分割，使内容适合一张图片（使用已存在的page对象）
     返回: (当前页段落列表, 剩余段落列表)
     """
     if not paragraphs:
         return [], []
-    
-    # 逐步添加段落，直到超出高度
-    current_paragraphs = []
-    
-    for i, para in enumerate(paragraphs):
-        # 先检查单个段落是否超出高度
-        single_para_html = build_html_from_paragraphs([para])
-        single_para_height = measure_content_height(page, single_para_html)
-        
-        if single_para_height > max_height:
-            # 单个段落就超出高度，需要分割段落
-            # 尝试按 <br> 标签分割
-            if '<br>' in para:
-                parts = para.split('<br>')
-                # 尝试逐步添加行，直到超出
-                current_part = []
-                for j, part in enumerate(parts):
-                    test_para = '<br>'.join(current_part + [part])
-                    test_html = build_html_from_paragraphs([test_para])
-                    test_height = measure_content_height(page, test_html)
-                    
-                    if test_height <= max_height:
-                        current_part.append(part)
-                    else:
-                        # 超出高度，停止
-                        if current_part:
-                            # 有部分内容可以放入
-                            current_paragraphs.append('<br>'.join(current_part))
-                            # 剩余部分重新组合成一个段落（过滤空字符串）
-                            remaining_parts = [p for p in parts[j:] if p.strip()]
-                            if remaining_parts:
-                                remaining_para = '<br>'.join(remaining_parts)
-                                remaining_paragraphs = [remaining_para] + paragraphs[i+1:]
-                            else:
-                                remaining_paragraphs = paragraphs[i+1:]
-                        else:
-                            # 连一行都放不下，强制放入（避免死循环）
-                            current_paragraphs.append(part)
-                            # 剩余部分（过滤空字符串）
-                            remaining_parts = [p for p in parts[j+1:] if p.strip()]
-                            if remaining_parts:
-                                remaining_para = '<br>'.join(remaining_parts)
-                                remaining_paragraphs = [remaining_para] + paragraphs[i+1:]
-                            else:
-                                remaining_paragraphs = paragraphs[i+1:]
-                        break
-                else:
-                    # 所有行都能放入
-                    current_paragraphs.append(para)
-                    remaining_paragraphs = paragraphs[i+1:]
-            else:
-                # 没有 <br> 标签，按字符数粗略分割（不精确，但能避免死循环）
-                # 估算：每个字符大约占用 45px 宽度，每行约 20 个字符，每行高度约 81px
-                # 可用高度约 1240px，约可放 15 行，约 300 个字符
-                char_per_line = 20
-                lines_per_page = max_height // 81  # 81 = 45 * 1.8 (line-height)
-                max_chars = char_per_line * lines_per_page
-                
-                if len(para) > max_chars:
-                    # 段落太长，分割（确保至少分割一部分，避免死循环）
-                    split_pos = max(max_chars, len(para) // 2)  # 至少分割一半
-                    current_para = para[:split_pos]
-                    remaining_para = para[split_pos:].strip()
-                    if current_para.strip():
-                        current_paragraphs.append(current_para)
-                    if remaining_para:
-                        remaining_paragraphs = [remaining_para] + paragraphs[i+1:]
-                    else:
-                        remaining_paragraphs = paragraphs[i+1:]
-                else:
-                    # 段落可以放入，但可能与其他段落一起会超出
-                    test_paragraphs = current_paragraphs + [para]
-                    test_html = build_html_from_paragraphs(test_paragraphs)
-                    test_height = measure_content_height(page, test_html)
-                    
-                    if test_height <= max_height:
-                        current_paragraphs.append(para)
-                        remaining_paragraphs = paragraphs[i+1:]
-                    else:
-                        # 超出高度，当前段落放到下一页
-                        remaining_paragraphs = paragraphs[i:]
-            break
+
+    # 使用二分查找，找出在不超过 max_height 的情况下最多能容纳的段落数
+    left, right = 0, len(paragraphs)  # 容纳段落数量区间 [left, right]
+    best = 0
+    while left <= right:
+        mid = (left + right) // 2
+        test = paragraphs[:mid]
+        if not test:
+            left = mid + 1
+            continue
+        h = measure_height_for_paragraphs(page, test)
+        if h <= max_height:
+            best = mid
+            left = mid + 1
         else:
-            # 单个段落不超出，尝试添加到当前页
-            test_paragraphs = current_paragraphs + [para]
-            test_html = build_html_from_paragraphs(test_paragraphs)
-            test_height = measure_content_height(page, test_html)
-            
-            if test_height <= max_height:
-                # 可以添加，继续
-                current_paragraphs.append(para)
+            right = mid - 1
+
+    if best > 0:
+        current_paragraphs = paragraphs[:best]
+        remaining_paragraphs = paragraphs[best:]
+        # 过滤空段落
+        current_paragraphs = [p for p in current_paragraphs if p.strip()]
+        remaining_paragraphs = [p for p in remaining_paragraphs if p.strip()]
+        return current_paragraphs, remaining_paragraphs
+
+    # 如果一个段落都放不下，处理首段过长的情况：对首段进行“按行”二分拆分
+    first = paragraphs[0]
+    if '<br>' in first:
+        parts = [p for p in first.split('<br>') if p.strip()]
+        l, r, best_lines = 1, len(parts), 0
+        while l <= r:
+            m = (l + r) // 2
+            test_para = '<br>'.join(parts[:m])
+            h = measure_height_for_paragraphs(page, [test_para])
+            if h <= max_height:
+                best_lines = m
+                l = m + 1
             else:
-                # 超出高度，停止添加，当前段落放到下一页
-                remaining_paragraphs = paragraphs[i:]
-                break
-    else:
-        # 所有段落都能放入
-        remaining_paragraphs = []
-    
-    # 过滤空段落
-    current_paragraphs = [p for p in current_paragraphs if p.strip()]
-    remaining_paragraphs = [p for p in remaining_paragraphs if p.strip()]
-    
+                r = m - 1
+        if best_lines > 0:
+            current_paragraphs = ['<br>'.join(parts[:best_lines])]
+            remaining_first = '<br>'.join(parts[best_lines:])
+            remaining_paragraphs = ([remaining_first] if remaining_first.strip() else []) + paragraphs[1:]
+            return current_paragraphs, remaining_paragraphs
+
+    # 否则对首段做粗略字符二分拆分，至少拿出一半，避免死循环
+    text = first
+    l, r, best_chars = 1, max(1, len(text) // 2), 0
+    while l <= r:
+        m = (l + r) // 2
+        h = measure_height_for_paragraphs(page, [text[:m]])
+        if h <= max_height:
+            best_chars = m
+            l = m + 1
+        else:
+            r = m - 1
+    if best_chars == 0:
+        # 兜底：至少截取部分字符，避免卡死
+        best_chars = max(1, len(text) // 3)
+    current_paragraphs = [text[:best_chars]]
+    remaining_first = text[best_chars:]
+    remaining_paragraphs = ([remaining_first] if remaining_first.strip() else []) + paragraphs[1:]
     return current_paragraphs, remaining_paragraphs
 
 

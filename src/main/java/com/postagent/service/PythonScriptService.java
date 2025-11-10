@@ -31,7 +31,7 @@ public class PythonScriptService {
      * @return 执行进程
      * @throws Exception 执行脚本时出现异常
      */
-    public String executeScript(String scriptName, String content, List<String> args) throws IOException {
+    public void executeScript(String scriptName, String targetDir, String content, List<String> args) throws IOException {
 
         Path script = props.getScriptDir().resolve(scriptName);
         if (!Files.exists(script)) {
@@ -56,10 +56,19 @@ public class PythonScriptService {
                 .directory(props.getScriptDir().toFile())
                 .redirectErrorStream(true);
 
-        log.info("Running python: {}", String.join(" ", cmd));
+        log.info("Running python script: {}", scriptName);
         Process process = pb.start();
+        String outputData = readProcessOutput(process.getInputStream());
 
-        return readProcessOutput(process.getInputStream());
+        // 向指定文件写入脚本响应（日志）
+        FileWriter writer = new FileWriter(targetDir + File.separator + "result.log", StandardCharsets.UTF_8, true);
+        writer.write(outputData);
+        writer.close();
+
+        // TODO 错误处理
+        if (outputData.contains("Error")) {
+            throw new IOException("Python script execution failed: " + outputData);
+        }
     }
 
     /**
