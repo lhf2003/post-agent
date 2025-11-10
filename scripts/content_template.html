@@ -1,0 +1,91 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <title>{{ title }}</title>
+  <style>
+    @font-face{
+      font-family:"Harmony_B";
+      src:url({{ font_b }}) format("truetype");
+    }
+    @font-face{
+      font-family:"Harmony_R";
+      src:url({{ font_r }}) format("truetype");
+    }
+    *{margin:0;padding:0;box-sizing:border-box;}
+    body{
+      width:1080px;
+      height:1440px;
+      margin:0 auto;
+      background:linear-gradient(135deg, #FFF8F0 0%, #E8DCC0 50%, #D4A574 100%);
+      font-family:'Harmony_R',sans-serif;
+      color:#5C4033;
+      display:flex;
+      flex-direction:column;
+      align-items:center;
+      justify-content:center;
+      overflow:hidden;
+      padding:100px 80px;
+      position:relative;
+    }
+    .decor-emoji{
+      position:absolute;
+      font-size:200px;
+      line-height:1;
+      opacity:0.5;
+      z-index:0;
+      pointer-events:none;
+      user-select:none;
+      filter:drop-shadow(0 4px 8px rgba(92,64,51,0.15));
+      text-shadow:0 2px 4px rgba(255,248,240,0.4);
+    }
+    .decor-emoji.bottom-left{
+      bottom:40px;
+      left:40px;
+    }
+    .decor-emoji.bottom-right{
+      bottom:40px;
+      right:40px;
+    }
+    .main-content{
+      position:relative;
+      z-index:1;
+      width:100%;
+      max-width:920px;
+      display:flex;
+      flex-direction:column;
+      align-items:flex-start;
+      justify-content:flex-start;
+    }
+    .content-text{
+      font-family:'Harmony_R',sans-serif;
+      font-size:45px;
+      line-height:1.8;
+      color:#5C4033;
+      word-break:break-word;
+      width:100%;
+      text-align:left;
+      letter-spacing:2px;
+    }
+    .content-text .paragraph{
+      margin-bottom:40px;
+    }
+    .content-text .paragraph:last-child{
+      margin-bottom:0;
+    }
+  </style>
+</head>
+<body>
+{% if decor_emoji %}
+<div class="decor-emoji {{ decor_position }}">{{ decor_emoji }}</div>
+{% endif %}
+<div class="main-content">
+  <div class="content-text">
+    {% for paragraph in paragraphs %}
+    <div class="paragraph">{{ paragraph|safe }}</div>
+    {% endfor %}
+  </div>
+</div>
+</body>
+</html>
+
