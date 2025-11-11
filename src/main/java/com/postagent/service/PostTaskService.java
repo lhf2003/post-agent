@@ -56,10 +56,11 @@ public class PostTaskService {
             String collectedTitle = overallState.value("collectedTitle").orElseThrow(() -> new RuntimeException("collectedTitle 不存在")).toString();
             String url = overallState.value("collectedUrl").orElseThrow(() -> new RuntimeException("collectedUrl 不存在")).toString();
             String targetDir = overallState.value("targetDir").orElseThrow(() -> new RuntimeException("targetDir 不存在")).toString();
+            String postId = overallState.value("postId").orElseThrow(() -> new RuntimeException("postId 不存在")).toString();
 
             // 保存任务结果
             PostTaskResult postTaskResult = new PostTaskResult();
-            postTaskResult.setDataId(postTask.getId());
+            postTaskResult.setDataId(Long.valueOf(postId));
             postTaskResult.setStatus(PostTask.Status.SUCCESS.getValue());
             postTaskResult.setDescription(collectedTitle + " 帖子url= " + url);
             postTaskResult.setOutputDirectory(targetDir);

@@ -51,8 +51,10 @@ public class DataCollectorNode implements NodeAction {
 
         log.info("✅收集到的帖子标题：{}", collectionResult.get("title"));
         log.info("✅收集到的帖子url：{}", collectionResult.get("url"));
+
         return Map.of("collectedUrl", collectionResult.get("url"),
-                "collectedTitle", collectionResult.get("title"));
+                "collectedTitle", collectionResult.get("title"),
+                "postId", collectionResult.get("postId"));
     }
 
     /**
@@ -89,8 +91,9 @@ public class DataCollectorNode implements NodeAction {
         // 解析帖子详情json字符串
         String url = jsonObject.getString("url");
         String title = jsonObject.getString("title");
+        String id = jsonObject.getString("id");
 
-        return Map.of("url", url, "title", title);
+        return Map.of("url", url, "title", title, "postId", id);
     }
 
 }
