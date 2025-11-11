@@ -55,14 +55,23 @@ def parse_underline_range(range_str):
 
 
 def build_html(title="小红书封面", underline_indices=None, decor_emoji=None, decor_position="bottom-right"):
-    """构建HTML，预处理标题字符以支持波浪线下划线"""
-    # 将标题转换为字符列表，标记需要下划线的字符
+    """构建HTML，预处理标题字符以支持波浪线下划线和换行"""
+    # 定义需要换行的符号
+    linebreak_symbols = "！？|"
+
+    # 将标题转换为字符列表，标记需要下划线的字符和需要换行的位置
     title_chars = []
     underline_set = set(underline_indices or [])
+    title_len = len(title)
+
     for i, char in enumerate(title):
+        # 判断是否需要换行：字符是换行符号 且 不是最后一个字符
+        need_linebreak = char in linebreak_symbols and i < title_len - 1
+
         title_chars.append({
             "char": char,
-            "underline": i in underline_set
+            "underline": i in underline_set,
+            "linebreak": need_linebreak
         })
 
     env = Environment(loader=FileSystemLoader(SCRIPT_DIR))
@@ -122,3 +131,5 @@ if __name__ == "__main__":
                      decor_emoji=args.decor_emoji, decor_position=args.decor_position)
     html_to_pic(html, out_file)
     print(f"✅ 小红书封面图已生成：{out_file} (1080 × 1440)")
+
+
