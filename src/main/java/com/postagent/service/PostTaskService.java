@@ -6,8 +6,7 @@ import com.postagent.entity.PostTask;
 import com.postagent.entity.PostTaskResult;
 import com.postagent.repository.PostTaskRepository;
 import com.postagent.repository.PostTaskResultRepository;
-import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.beans.factory.annotation.Qualifier;
+import jakarta.annotation.Resource;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 
@@ -18,23 +17,18 @@ import java.util.Optional;
 
 @Service
 public class PostTaskService {
-    @Autowired
+    @Resource
     private PostTaskRepository postTaskRepository;
-    @Autowired
+    @Resource
     private PostTaskResultRepository postTaskResultRepository;
-
-    @Autowired
-    @Qualifier("compiledPostAgentGraph")
+    @Resource(name = "compiledPostAgentGraph")
     private CompiledGraph compiledGraph;
 
     public void addPostTask(PostTask postTask) {
         // 保存任务到数据库
         postTask.setCreateTime(new Date());
         postTask.setStatus(PostTask.Status.PENDING.getValue());
-        PostTask save = postTaskRepository.save(postTask);
-        if (save == null) {
-            throw new RuntimeException("添加任务失败");
-        }
+        postTaskRepository.save(postTask);
     }
 
     public List<PostTask> getPostTasksByPage(Pageable pageable) {
@@ -50,14 +44,25 @@ public class PostTaskService {
         postTask.setStatus(PostTask.Status.RUNNING.getValue());
         Map<String, Object> params = Map.of("task_object", postTask);
         postTaskRepository.save(postTask);
+        // 执行工作流
         Optional<OverAllState> result = compiledGraph.call(params);
         if (result.isPresent()) {
             OverAllState overallState = result.get();
+            // 更新任务状态
             postTask.setStatus(PostTask.Status.SUCCESS.getValue());
             postTaskRepository.save(postTask);
-            Long postId = Long.parseLong(overallState.value("postId").get().toString());
-            PostTaskResult postTaskResult = postTaskResultRepository.findByDataId(postId);
-            postTaskResult.setOutputDirectory(overallState.value("targetDir").get().toString());
+
+            // 解析工作流结果
+            String collectedTitle = overallState.value("collectedTitle").orElseThrow(() -> new RuntimeException("collectedTitle 不存在")).toString();
+            String url = overallState.value("collectedUrl").orElseThrow(() -> new RuntimeException("collectedUrl 不存在")).toString();
+            String targetDir = overallState.value("targetDir").orElseThrow(() -> new RuntimeException("targetDir 不存在")).toString();
+
+            // 保存任务结果
+            PostTaskResult postTaskResult = new PostTaskResult();
+            postTaskResult.setDataId(postTask.getId());
+            postTaskResult.setStatus(PostTask.Status.SUCCESS.getValue());
+            postTaskResult.setDescription(collectedTitle + " 帖子url= " + url);
+            postTaskResult.setOutputDirectory(targetDir);
             postTaskResultRepository.save(postTaskResult);
         } else {
             postTask.setStatus(PostTask.Status.FAILED.getValue());

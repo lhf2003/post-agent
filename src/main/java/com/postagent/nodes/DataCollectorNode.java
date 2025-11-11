@@ -25,8 +25,6 @@ import java.util.Optional;
 
 /**
  * 数据收集节点 根据问题分析结果收集相关数据和文献
- *
-
  */
 @Slf4j
 @Component
@@ -46,16 +44,15 @@ public class DataCollectorNode implements NodeAction {
 
         //TODO post_origin目前是是死值
         PostTask taskObject = (PostTask) state.value("task_object").orElse(new PostTask());
-        String postOrigin = Optional.ofNullable(taskObject.getTargetOrigin()).orElse("小红书");
+        String postOrigin = Optional.ofNullable(taskObject.getTargetOrigin()).orElse("HackerNews");
 
         // 解析收集结果
         Map<String, String> collectionResult = parseCollectionResult(postOrigin);
 
-        log.info("======DataCollectorNode apply end======");
-
+        log.info("✅收集到的帖子标题：{}", collectionResult.get("title"));
+        log.info("✅收集到的帖子url：{}", collectionResult.get("url"));
         return Map.of("collectedUrl", collectionResult.get("url"),
-                "collectedTitle", collectionResult.get("title"),
-                "postId", collectionResult.get("postId"));
+                "collectedTitle", collectionResult.get("title"));
     }
 
     /**
@@ -65,37 +62,35 @@ public class DataCollectorNode implements NodeAction {
      */
     public Map<String, String> parseCollectionResult(String origin) throws ResourceAccessException, NullPointerException {
         log.info("开始获取热门帖子🔎...");
-        String result = "";
+
+        // 获取热门帖子id列表（500条）
         List<Integer> hotPostIdList = restClient.get().uri("https://hacker-news.firebaseio.com/v0/topstories.json?print=pretty").retrieve().body(List.class);
         if (CollectionUtils.isEmpty(hotPostIdList)) {
             throw new NullPointerException("收集数据节点获取热门帖子id列表失败，返回结果为空");
         }
-        Integer hotPostId = 0;
+
+        // 遍历热门帖子id列表，获取第一个未被采集的帖子详情
+        JSONObject jsonObject = null;
         for (Integer postId : hotPostIdList) {
             PostTaskResult postTaskResult = postTaskResultRepository.findByDataId(postId);
-            if (postTaskResult != null) {
-                continue;
+            if (postTaskResult == null) {
+                log.info("开始获取帖子id= {} 的详细信息🔎...", postId);
+                String result = restClient.get().uri("https://hacker-news.firebaseio.com/v0/item/" + postId + ".json?print=pretty").retrieve().body(String.class);
+                if (StringUtils.hasText(result)) {
+                    jsonObject = JSON.parseObject(result);
+                    int score = jsonObject.getIntValue("score");
+                    if (score > 60) {
+                        break;
+                    }
+                }
             }
-            hotPostId = postId;
-            log.info("开始获取帖子id= {} 的详细信息🔎...", postId);
-            result = restClient.get().uri("https://hacker-news.firebaseio.com/v0/item/" + postId + ".json?print=pretty").retrieve().body(String.class);
-            break;
         }
 
-        if (!StringUtils.hasText(result)) {
-            throw new NullPointerException("收集数据节点获取数据失败，返回结果为空");
-        }
-
-        JSONObject jsonObject = JSON.parseObject(result);
+        // 解析帖子详情json字符串
         String url = jsonObject.getString("url");
         String title = jsonObject.getString("title");
 
-        PostTaskResult saveTaskResult = new PostTaskResult();
-        saveTaskResult.setDataId(Long.valueOf(hotPostId));
-        saveTaskResult.setDescription(title + " 帖子url= " + url);
-        postTaskResultRepository.save(saveTaskResult);
-
-        return Map.of("url", url, "title", title, "postId", hotPostId.toString());
+        return Map.of("url", url, "title", title);
     }
 
 }

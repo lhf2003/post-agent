@@ -7,6 +7,7 @@ import jakarta.annotation.Resource;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.ai.chat.client.ChatClient;
 import org.springframework.stereotype.Component;
+import org.springframework.util.StringUtils;
 
 import java.io.*;
 import java.nio.charset.StandardCharsets;
@@ -32,7 +33,9 @@ public class SummarizeNode implements NodeAction {
     @Override
     public Map<String, Object> apply(OverAllState state) throws Exception {
         log.info("======SummarizeNode apply start======");
-        String targetDir = state.value("targetDir").get().toString();
+        String targetDir = state.value("targetDir")
+                .orElseThrow(() -> new IllegalArgumentException("targetDir is empty"))
+                .toString();
         // 目前设计的上一个节点只提供一个url，所以直接取第一个文件
         List<String> textList = getTextFromFile(targetDir);
         if (textList.isEmpty()) {
@@ -46,8 +49,11 @@ public class SummarizeNode implements NodeAction {
                 .call()
                 .content();
 
+        if (!StringUtils.hasText(result)) {
+            throw new IllegalArgumentException("AI output is empty");
+        }
+
         log.info("✅AI输出的小红书文案：\n {}", result);
-        log.info("======SummarizeNode apply end======");
         return Map.of("summary_content", result);
     }
 

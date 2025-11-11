@@ -36,7 +36,6 @@ public class TransformNode implements NodeAction {
         generateContentImage(aiResult, collectedTitle, targetDir);
 
         log.info("✅图片存储路径：{}", targetDir);
-        log.info("======transformNode apply end======");
         return Map.of();
     }
 
