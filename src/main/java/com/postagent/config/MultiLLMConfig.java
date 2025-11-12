@@ -17,7 +17,7 @@ public class MultiLLMConfig {
     private static final String IMAGE_MODEL = "wan2.5-i2i-preview";
 
     // 温度参数常量
-    private static final double WRITING_TEMPERATURE = 0.6;
+    private static final double WRITING_TEMPERATURE = 0.8;
     public static final double IMAGE_TEMPERATURE = 0.6;
 
     // Token限制常量
