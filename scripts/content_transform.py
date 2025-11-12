@@ -36,17 +36,65 @@ def to_b64(path):
     return "data:font/truetype;base64," + base64.b64encode(path.read_bytes()).decode()
 
 
+def parse_markdown_to_html(text: str) -> str:
+    """
+    将 Markdown 语法转换为 HTML
+    支持的语法：
+    - **text** 或 __text__ -> <strong>text</strong> (加粗)
+    - *text* 或 _text_ -> <em>text</em> (斜体)
+    - `text` -> <code>text</code> (行内代码)
+    """
+    import re
+
+    # 使用 Unicode 私有使用区字符作为占位符，避免与普通文本冲突
+    # 这些字符不会被 HTML 转义影响
+    PLACEHOLDER_STRONG_START = '\uE000'
+    PLACEHOLDER_STRONG_END = '\uE001'
+    PLACEHOLDER_EM_START = '\uE002'
+    PLACEHOLDER_EM_END = '\uE003'
+    PLACEHOLDER_CODE_START = '\uE004'
+    PLACEHOLDER_CODE_END = '\uE005'
+
+    # 处理行内代码：`text`（最先处理，避免代码内的 Markdown 被解析）
+    text = re.sub(r'`([^`]+)`', PLACEHOLDER_CODE_START + r'\1' + PLACEHOLDER_CODE_END, text)
+
+    # 处理加粗：**text** 或 __text__
+    text = re.sub(r'\*\*([^*]+)\*\*', PLACEHOLDER_STRONG_START + r'\1' + PLACEHOLDER_STRONG_END, text)
+    text = re.sub(r'__([^_]+)__', PLACEHOLDER_STRONG_START + r'\1' + PLACEHOLDER_STRONG_END, text)
+
+    # 处理斜体：*text* 或 _text_（在加粗之后处理，避免冲突）
+    # 确保不是加粗标记的一部分
+    text = re.sub(r'(?<!\*)\*([^*\n]+?)\*(?!\*)', PLACEHOLDER_EM_START + r'\1' + PLACEHOLDER_EM_END, text)
+    text = re.sub(r'(?<!_)_([^_\n]+?)_(?!_)', PLACEHOLDER_EM_START + r'\1' + PLACEHOLDER_EM_END, text)
+
+    # 转义 HTML 特殊字符（占位符不会被转义）
+    text = text.replace('&', '&amp;').replace('<', '&lt;').replace('>', '&gt;')
+
+    # 将占位符转换为 HTML 标签
+    text = text.replace(PLACEHOLDER_STRONG_START, '<strong>').replace(PLACEHOLDER_STRONG_END, '</strong>')
+    text = text.replace(PLACEHOLDER_EM_START, '<em>').replace(PLACEHOLDER_EM_END, '</em>')
+    text = text.replace(PLACEHOLDER_CODE_START, '<code>').replace(PLACEHOLDER_CODE_END, '</code>')
+
+    return text
+
+
 def build_html(content="内容文本", decor_emoji=None, decor_position="bottom-right"):
-    """构建HTML，用于显示内容文本，处理\n\n作为段落分隔"""
+    """构建HTML，用于显示内容文本，处理\n\n作为段落分隔，支持 Markdown 语法"""
     # 将\n\n分割成段落，过滤空段落
     # 段落内的单个\n需要转换为<br>标签以便在HTML中换行
     paragraphs = []
     for p in content.split('\n\n'):
         p = p.strip()
         if p:
-            # 将段落内的单个\n转换为<br>标签
-            paragraphs.append(p.replace('\n', '<br>'))
-    
+            # 先将段落内的单个\n转换为临时标记，避免被 Markdown 解析影响
+            # 使用一个不太可能出现在文本中的标记
+            p = p.replace('\n', '___BR_TAG___')
+            # 应用 Markdown 解析
+            p = parse_markdown_to_html(p)
+            # 将临时标记转换回 <br> 标签
+            p = p.replace('___BR_TAG___', '<br>')
+            paragraphs.append(p)
+
     env = Environment(loader=FileSystemLoader(SCRIPT_DIR))
     tpl = env.get_template("content_template.html")
     cfg = {
@@ -196,13 +244,18 @@ if __name__ == "__main__":
         out_dir = ROOT_DIR / out_dir
     out_dir.mkdir(parents=True, exist_ok=True)
 
-    # 将内容转换为段落列表
+    # 将内容转换为段落列表（应用 Markdown 解析）
     paragraphs = []
     for p in content.split('\n\n'):
         p = p.strip()
         if p:
-            # 将段落内的单个\n转换为<br>标签
-            paragraphs.append(p.replace('\n', '<br>'))
+            # 先将段落内的单个\n转换为临时标记，避免被 Markdown 解析影响
+            p = p.replace('\n', '___BR_TAG___')
+            # 应用 Markdown 解析
+            p = parse_markdown_to_html(p)
+            # 将临时标记转换回 <br> 标签
+            p = p.replace('___BR_TAG___', '<br>')
+            paragraphs.append(p)
 
     # 可用高度：图片高度1440 - 上下padding 200 = 1240
     MAX_CONTENT_HEIGHT = 1240

@@ -65,8 +65,17 @@ def build_html(title="小红书封面", underline_indices=None, decor_emoji=None
     title_len = len(title)
 
     for i, char in enumerate(title):
-        # 判断是否需要换行：字符是换行符号 且 不是最后一个字符
-        need_linebreak = char in linebreak_symbols and i < title_len - 1
+        # 判断是否需要换行：
+        # 1. 字符是换行符号
+        # 2. 不是最后一个字符
+        # 3. 如果是连续符号，只在最后一个连续符号后换行
+        need_linebreak = False
+        if char in linebreak_symbols and i < title_len - 1:
+            # 检查下一个字符是否也是换行符号
+            next_char = title[i + 1] if i + 1 < title_len else None
+            # 如果下一个字符不是换行符号，或者不存在，则当前字符后换行
+            if next_char is None or next_char not in linebreak_symbols:
+                need_linebreak = True
 
         title_chars.append({
             "char": char,
