@@ -18,6 +18,49 @@ def sanitize_filename(text: str) -> str:
     return text[:120] if len(text) > 120 else text
 
 
+def filter_links_and_media(markdown: str) -> str:
+    """
+    过滤 Markdown 中的图片、视频和跳转链接
+
+    Args:
+        markdown: 原始 Markdown 文本
+
+    Returns:
+        过滤后的 Markdown 文本
+    """
+    text = markdown
+
+    # 1. 移除 Markdown 图片语法：![alt](url) 或 ![alt](url "title")
+    text = re.sub(r"!\[.*?\]\([^\)]+\)", "", text)
+
+    # 2. 移除 HTML 图片标签：<img ...>
+    text = re.sub(r"<img[^>]*>", "", text, flags=re.IGNORECASE)
+
+    # 3. 移除 HTML 视频标签：<video>...</video>
+    text = re.sub(r"<video[^>]*>.*?</video>", "", text, flags=re.IGNORECASE | re.DOTALL)
+
+    # 4. 移除视频文件链接（保留链接文本，移除链接）
+    # 匹配视频文件扩展名的链接：.mp4, .webm, .avi, .mov, .flv, .mkv, .m4v, .3gp 等
+    video_extensions = r"\.(mp4|webm|avi|mov|flv|mkv|m4v|3gp|wmv|asf|rm|rmvb)(\?.*?)?"
+    # 匹配 [text](video_url) 格式，移除整个链接
+    text = re.sub(r"\[([^\]]*)\]\([^\)]*" + video_extensions + r"[^\)]*\)", r"\1", text, flags=re.IGNORECASE)
+    # 匹配直接的视频 URL
+    text = re.sub(r"https?://[^\s\)]+" + video_extensions, "", text, flags=re.IGNORECASE)
+
+    # 5. 移除跳转链接，但保留链接文本
+    # 匹配 [text](url) 格式，替换为纯文本
+    text = re.sub(r"\[([^\]]+)\]\([^\)]+\)", r"\1", text)
+
+    # 6. 移除多余的空白行（连续3个或更多换行符替换为2个）
+    text = re.sub(r"\n{3,}", "\n\n", text)
+
+    # 7. 清理行首行尾空白
+    lines = [line.rstrip() for line in text.split("\n")]
+    text = "\n".join(lines)
+
+    return text.strip()
+
+
 def build_front_matter(title: str, url: str, dt: datetime) -> str:
     iso = dt.astimezone(tz.tzlocal()).isoformat(timespec="seconds")
     return f"""---
@@ -87,13 +130,23 @@ def parse_title_and_date_from_html(html: str, url: str) -> tuple[str, datetime]:
 
 
 def url_to_markdown(url: str, timeout: int = 20) -> dict:
-    # 使用 requests 下载 HTML（可控超时与 UA）
+    # 使用 requests 下载 HTML（增强请求头，模拟真实浏览器）
     headers = {
         "User-Agent": (
             "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
             "AppleWebKit/537.36 (KHTML, like Gecko) "
             "Chrome/124.0.0.0 Safari/537.36"
-        )
+        ),
+        "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7",
+        "Accept-Language": "zh-CN,zh;q=0.9,en;q=0.8",
+        "Accept-Encoding": "gzip, deflate, br",
+        "DNT": "1",
+        "Connection": "keep-alive",
+        "Upgrade-Insecure-Requests": "1",
+        "Sec-Fetch-Dest": "document",
+        "Sec-Fetch-Mode": "navigate",
+        "Sec-Fetch-Site": "none",
+        "Sec-Fetch-User": "?1"
     }
     try:
         resp = requests.get(url, headers=headers, timeout=timeout)
@@ -123,6 +176,9 @@ def url_to_markdown(url: str, timeout: int = 20) -> dict:
 
     # 标题与日期使用 BeautifulSoup 自行解析，避免版本兼容问题
     title, date_obj = parse_title_and_date_from_html(html, url)
+
+    # 过滤图片、视频和跳转链接
+    md = filter_links_and_media(md)
 
     # 统一样式：Front Matter + 一级标题
     front = build_front_matter(title, url, date_obj)
@@ -184,7 +240,7 @@ def main():
     # 修改默认输出目录为当前时间格式
     default_outdir = datetime.now().strftime("%Y%m%d_%H%M%S")
     parser.add_argument("-o", "--outdir", default=default_outdir, help=f"输出目录（默认：{default_outdir}）")
-    parser.add_argument("-t", "--timeout", type=int, default=60, help="下载超时秒数（默认：20）")
+    parser.add_argument("-t", "--timeout", type=int, default=20, help="下载超时秒数（默认：20）")
     args = parser.parse_args()
 
     exit_code = 0
