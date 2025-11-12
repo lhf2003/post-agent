@@ -60,10 +60,12 @@ public class PostTaskService {
 
             // 保存任务结果
             PostTaskResult postTaskResult = new PostTaskResult();
+            postTaskResult.setTaskId(taskId);
             postTaskResult.setDataId(Long.valueOf(postId));
             postTaskResult.setStatus(PostTask.Status.SUCCESS.getValue());
             postTaskResult.setDescription(collectedTitle + " 帖子url= " + url);
             postTaskResult.setOutputDirectory(targetDir);
+            postTaskResult.setCreateTime(new Date());
             postTaskResultRepository.save(postTaskResult);
         } else {
             postTask.setStatus(PostTask.Status.FAILED.getValue());

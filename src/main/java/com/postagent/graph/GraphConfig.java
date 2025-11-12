@@ -1,7 +1,9 @@
 package com.postagent.graph;
 
 import com.alibaba.cloud.ai.graph.*;
+import com.alibaba.cloud.ai.graph.action.AsyncEdgeAction;
 import com.alibaba.cloud.ai.graph.exception.GraphStateException;
+import com.postagent.dispatcher.ExceptionDispatcher;
 import com.postagent.nodes.DataCollectorNode;
 import com.postagent.nodes.DownloadNode;
 import com.postagent.nodes.SummarizeNode;
@@ -12,6 +14,9 @@ import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 
+import java.util.Map;
+
+import static com.alibaba.cloud.ai.graph.GraphRepresentation.Type.MERMAID;
 import static com.alibaba.cloud.ai.graph.OverAllState.DEFAULT_INPUT_KEY;
 import static com.alibaba.cloud.ai.graph.StateGraph.END;
 import static com.alibaba.cloud.ai.graph.StateGraph.START;
@@ -58,7 +63,9 @@ public class GraphConfig {
                 // 定义边
                 .addEdge(START, "collector_agent") // 开始节点
                 .addEdge("collector_agent", "download_agent")
-                .addEdge("download_agent", "summarize_agent")
+                .addConditionalEdges("download_agent",
+                        AsyncEdgeAction.edge_async(new ExceptionDispatcher()),
+                        Map.of("summarize_agent", "summarize_agent", END, END))
                 .addEdge("summarize_agent", "transform_agent")
                 .addEdge("transform_agent", END); // 结束节点
 
@@ -72,6 +79,7 @@ public class GraphConfig {
         log.info("小红书笔记工作流开始编译...");
 
         CompiledGraph compiledGraph = stateGraph.compile(CompileConfig.builder().build());
+        System.out.println(compiledGraph.getGraph(MERMAID));
         // 设置最大迭代次数
         compiledGraph.setMaxIterations(100);
         // 配置定时任务，每15分钟执行一次

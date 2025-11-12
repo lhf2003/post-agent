@@ -7,12 +7,7 @@ import com.alibaba.fastjson.JSONObject;
 import com.postagent.entity.PostTask;
 import com.postagent.entity.PostTaskResult;
 import com.postagent.repository.PostTaskResultRepository;
-import com.postagent.service.PostTaskResultService;
-import jakarta.annotation.Resource;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.retry.annotation.Backoff;
-import org.springframework.retry.annotation.Retryable;
 import org.springframework.stereotype.Component;
 import org.springframework.util.CollectionUtils;
 import org.springframework.util.StringUtils;
@@ -85,6 +80,7 @@ public class DataCollectorNode implements NodeAction {
                         break;
                     }
                 }
+                log.info("帖子id= {} 已被采集，跳过", postId);
             }
         }
 

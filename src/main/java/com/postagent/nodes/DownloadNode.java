@@ -1,6 +1,7 @@
 package com.postagent.nodes;
 
 import com.alibaba.cloud.ai.graph.OverAllState;
+import com.alibaba.cloud.ai.graph.StateGraph;
 import com.alibaba.cloud.ai.graph.action.NodeAction;
 import com.postagent.service.PythonScriptService;
 import jakarta.annotation.Resource;
@@ -46,11 +47,15 @@ public class DownloadNode implements NodeAction {
         }
 
         // 执行python脚本
-        pythonScriptService.executeScript("downloadToMarkdown.py", targetDir, collectedUrl, List.of("-o", targetDir));
-
+        try {
+            pythonScriptService.executeScript("downloadToMarkdown.py", targetDir, collectedUrl, List.of("-o", targetDir));
+        } catch (IOException e) {
+            log.error("下载失败：{}", e.getMessage());
+            return Map.of("targetDir", e.getMessage(), "nextNode", StateGraph.END);
+        }
         log.info("\uD83D\uDCD6下载成功");
         log.info("✅下载的.md文件存储路径：{}", targetDir);
-        return Map.of("targetDir", targetDir);
+        return Map.of("targetDir", targetDir, "nextNode", "summarize_agent");
     }
 
 }
