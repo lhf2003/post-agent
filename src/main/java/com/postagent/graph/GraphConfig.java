@@ -4,10 +4,7 @@ import com.alibaba.cloud.ai.graph.*;
 import com.alibaba.cloud.ai.graph.action.AsyncEdgeAction;
 import com.alibaba.cloud.ai.graph.exception.GraphStateException;
 import com.postagent.dispatcher.ExceptionDispatcher;
-import com.postagent.nodes.DataCollectorNode;
-import com.postagent.nodes.DownloadNode;
-import com.postagent.nodes.SummarizeNode;
-import com.postagent.nodes.TransformNode;
+import com.postagent.nodes.*;
 import jakarta.annotation.Resource;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Qualifier;
@@ -30,6 +27,9 @@ import static com.alibaba.cloud.ai.graph.action.AsyncNodeAction.node_async;
 public class GraphConfig {
     @Resource
     private DataCollectorNode dataCollectorNode;
+
+    @Resource
+    private TranslateNode translateNode;
 
     @Resource
     private DownloadNode downloadNode;
@@ -57,12 +57,14 @@ public class GraphConfig {
         StateGraph graph = new StateGraph("XiaoHongShu Workflow", keyStrategyFactory)
                 // 添加节点
                 .addNode("collector_agent", node_async(dataCollectorNode))
+                .addNode("translate_agent", node_async(translateNode))
                 .addNode("download_agent", node_async(downloadNode))
                 .addNode("summarize_agent", node_async(summarizeNode))
                 .addNode("transform_agent", node_async(transformNode))
                 // 定义边
                 .addEdge(START, "collector_agent") // 开始节点
                 .addEdge("collector_agent", "download_agent")
+//                .addEdge("translate_agent", "download_agent")
                 .addConditionalEdges("download_agent",
                         AsyncEdgeAction.edge_async(new ExceptionDispatcher()),
                         Map.of("summarize_agent", "summarize_agent", END, END))
@@ -79,7 +81,6 @@ public class GraphConfig {
         log.info("小红书笔记工作流开始编译...");
 
         CompiledGraph compiledGraph = stateGraph.compile(CompileConfig.builder().build());
-        System.out.println(compiledGraph.getGraph(MERMAID));
         // 设置最大迭代次数
         compiledGraph.setMaxIterations(100);
         // 配置定时任务，每15分钟执行一次

@@ -36,35 +36,37 @@ def to_b64(path):
     return "data:font/truetype;base64," + base64.b64encode(path.read_bytes()).decode()
 
 
-def parse_underline_range(range_str):
-    """解析下划线范围，格式：[start,end] 或 start,end"""
-    if not range_str:
-        return None
-    # 去掉方括号
-    range_str = range_str.strip().strip('[]')
-    try:
-        parts = range_str.split(',')
-        if len(parts) != 2:
-            return None
-        start = int(parts[0].strip())
-        end = int(parts[1].strip())
-        # 返回需要加下划线的所有下标
-        return list(range(start, end + 1))
-    except ValueError:
-        return None
+def build_html(title="小红书封面"):
+    """构建HTML，预处理标题字符以支持换行"""
+    # 预处理：过滤掉仅包含特殊符号的独立行
+    special_line_chars = set("!?？！。，、；;:|~…—-")
+    filtered_lines = []
+    for line in title.split('\n'):
+        stripped = line.strip()
+        if stripped and all(ch in special_line_chars for ch in stripped):
+            continue
+        filtered_lines.append(line)
+    title = '\n'.join(filtered_lines)
 
-
-def build_html(title="小红书封面", underline_indices=None, decor_emoji=None, decor_position="bottom-right"):
-    """构建HTML，预处理标题字符以支持波浪线下划线和换行"""
     # 定义需要换行的符号
     linebreak_symbols = "！？|"
 
     # 将标题转换为字符列表，标记需要下划线的字符和需要换行的位置
     title_chars = []
-    underline_set = set(underline_indices or [])
     title_len = len(title)
 
+    # 用于跟踪实际字符索引（排除换行符）
+    actual_char_index = 0
+
     for i, char in enumerate(title):
+        # 如果遇到换行符 \n，在前一个字符后标记换行，但不添加换行符本身
+        if char == '\n':
+            # 如果已经有字符，在前一个字符后标记换行
+            if title_chars:
+                title_chars[-1]["linebreak"] = True
+            # 跳过换行符，不添加到字符列表
+            continue
+
         # 判断是否需要换行：
         # 1. 字符是换行符号
         # 2. 不是最后一个字符
@@ -79,18 +81,39 @@ def build_html(title="小红书封面", underline_indices=None, decor_emoji=None
 
         title_chars.append({
             "char": char,
-            "underline": i in underline_set,
             "linebreak": need_linebreak
         })
 
+        # 只有非换行符才增加实际字符索引
+        actual_char_index += 1
+
+    if title_chars:
+        lines = []
+        current_line = []
+        for info in title_chars:
+            current_line.append(info)
+            if info["linebreak"]:
+                lines.append(current_line)
+                current_line = []
+        if current_line:
+            lines.append(current_line)
+
+        filtered_chars = []
+        for line_infos in lines:
+            content = ''.join(item["char"] for item in line_infos).strip()
+            content_compact = ''.join(ch for ch in content if not ch.isspace())
+            if content_compact and all(ch in special_line_chars for ch in content_compact):
+                continue
+            filtered_chars.extend(line_infos)
+
+        title_chars = filtered_chars
+
     env = Environment(loader=FileSystemLoader(SCRIPT_DIR))
-    tpl = env.get_template("template.html")
+    tpl = env.get_template("cover_template.html")
     cfg = {
         "font_b": to_b64(FONT_CONFIG["font_b"]),
         "font_r": to_b64(FONT_CONFIG["font_r"]),
-        "title_chars": title_chars,
-        "decor_emoji": decor_emoji,
-        "decor_position": decor_position
+        "title_chars": title_chars
     }
     return tpl.render(**cfg)
 
@@ -112,19 +135,13 @@ if __name__ == "__main__":
                         help="输出文件名（不包含扩展名）")
     parser.add_argument("--title", default="小红书封面",
                         help="标题内容（默认：小红书封面）")
-    parser.add_argument("--underline", default=None,
-                        help="标题下划线范围，格式：[start,end]，如 [0,2] 表示下标0到2的字符")
-    parser.add_argument("--decor-emoji", default=None,
-                        help="装饰emoji表情（可选，如：🎉、✨、💡、🤨等）")
-    parser.add_argument("--decor-position", choices=["bottom-left", "bottom-right"], default="bottom-left",
-                        help="装饰emoji位置：bottom-left（左下角）或 bottom-right（右下角），默认右下角")
     parser.add_argument("--out", default=str(OUT_DIR),
                         help="输出目录，支持相对路径与绝对路径（默认：项目 out 目录）")
 
     args = parser.parse_args()
 
-    # 解析下划线范围
-    underline_indices = parse_underline_range(args.underline)
+    # 处理转义字符：将字符串中的 \n 转换为真正的换行符
+    title = args.title.replace('\\n', '\n')
 
     # 解析输出目录
     out_dir = Path(args.out)
@@ -136,9 +153,6 @@ if __name__ == "__main__":
     out_file = out_dir / f"{args.name}.png"
 
     # 生成HTML并截图
-    html = build_html(title=args.title, underline_indices=underline_indices,
-                     decor_emoji=args.decor_emoji, decor_position=args.decor_position)
+    html = build_html(title=title)
     html_to_pic(html, out_file)
     print(f"✅ 小红书封面图已生成：{out_file} (1080 × 1440)")
-
-

@@ -28,12 +28,12 @@ public class TransformNode implements NodeAction {
     public Map<String, Object> apply(OverAllState state) throws Exception {
         log.info("======transformNode apply start======");
         String summaryContent = state.value("summary_content").get().toString();
-        String collectedTitle = state.value("collectedTitle").get().toString();
+//        String collectedTitle = state.value("collectedTitle").get().toString();
         String targetDir = state.value("targetDir").get().toString();
 
         JSONObject aiResult = JSON.parseObject(summaryContent);
-        generateCoverImage(aiResult, collectedTitle, targetDir);
-        generateContentImage(aiResult, collectedTitle, targetDir);
+        generateCoverImage(aiResult, targetDir);
+        generateContentImage(aiResult, targetDir);
 
         log.info("✅图片存储路径：{}", targetDir);
         return Map.of();
@@ -42,11 +42,10 @@ public class TransformNode implements NodeAction {
     /**
      * 生成封面图片
      * @param aiResult 包含标题和emoji的json对象
-     * @param collectedTitle 收集到的标题
      * @param targetDir 目标目录
      * @throws IOException 生成图片时出现异常
      */
-    private void generateCoverImage(JSONObject aiResult, String collectedTitle, String targetDir) throws IOException {
+    private void generateCoverImage(JSONObject aiResult, String targetDir) throws IOException {
         // 拼接命令参数列表
         List<String> argList = new ArrayList<>();
         // 封面标题
@@ -57,22 +56,21 @@ public class TransformNode implements NodeAction {
 //        argList.add("\uD83E\uDD29");
         // 图片名称
         argList.add("--name");
-        argList.add(collectedTitle + "_cover");
+        argList.add("cover");
         // 输出目录
         argList.add("--out");
         argList.add(targetDir);
 
-        pythonScriptService.executeScript("textTransformToPng.py", targetDir, "", argList);
+        pythonScriptService.executeScript("buildCover.py", targetDir, "", argList);
     }
 
     /**
      * 生成内容图片
      * @param aiResult 包含标题和emoji的json对象
-     * @param collectedTitle 收集到的标题
      * @param targetDir 目标目录
      * @throws IOException 生成图片时出现异常
      */
-    private void generateContentImage(JSONObject aiResult, String collectedTitle, String targetDir) throws IOException {
+    private void generateContentImage(JSONObject aiResult, String targetDir) throws IOException {
         String content = aiResult.getString("summary");
         // 拼接命令参数列表
         List<String> argList = new ArrayList<>();
@@ -81,7 +79,7 @@ public class TransformNode implements NodeAction {
         argList.add(content);
         // 图片名称
         argList.add("--name");
-        argList.add(collectedTitle + "_content");
+        argList.add("content");
         // 输出目录
         argList.add("--out");
         argList.add(targetDir);

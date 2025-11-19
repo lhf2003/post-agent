@@ -66,7 +66,7 @@ public class PythonScriptService {
         writer.close();
 
         // TODO 错误处理
-        if (outputData.contains("Error")) {
+        if (outputData.contains("Error") || outputData.startsWith("FAIL")) {
             throw new IOException("Python script execution failed: " + outputData);
         }
     }

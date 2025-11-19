@@ -3,7 +3,7 @@
 from pathlib import Path
 from playwright.sync_api import sync_playwright
 from jinja2 import Environment, FileSystemLoader
-import base64, sys, argparse
+import base64, sys, argparse, re
 
 # 确保控制台输出支持 UTF-8（Windows 兼容）
 if sys.platform == 'win32':
@@ -44,7 +44,6 @@ def parse_markdown_to_html(text: str) -> str:
     - *text* 或 _text_ -> <em>text</em> (斜体)
     - `text` -> <code>text</code> (行内代码)
     """
-    import re
 
     # 使用 Unicode 私有使用区字符作为占位符，避免与普通文本冲突
     # 这些字符不会被 HTML 转义影响
@@ -78,22 +77,60 @@ def parse_markdown_to_html(text: str) -> str:
     return text
 
 
+# 使用 Unicode 私有使用区字符作为换行占位符，避免与 Markdown 语法冲突
+BR_PLACEHOLDER = '\uE006'
+
+
+def paragraph_to_html(paragraph: str) -> str:
+    """将段落文本转换为 HTML（支持单换行）"""
+    # 先将段落内的换行符替换为占位符（在 Markdown 解析之前）
+    paragraph = paragraph.replace('\n', BR_PLACEHOLDER)
+    # 解析 Markdown 语法（占位符不会被 Markdown 解析影响）
+    paragraph = parse_markdown_to_html(paragraph)
+    # 最后将占位符转换为 <br> 标签
+    paragraph = paragraph.replace(BR_PLACEHOLDER, '<br>')
+    return paragraph
+
+
+def find_safe_breakpoint(text: str, index: int) -> int:
+    """寻找较安全的分割位置，尽量避免打断 Markdown 语法或单词"""
+    if index >= len(text):
+        return len(text)
+
+    safe_index = index
+    boundary_chars = set(' \t\n，。！？；：,.!?;:')
+
+    # 优先尝试向前找到分隔符或空白字符
+    while safe_index > 0 and text[safe_index - 1] not in boundary_chars:
+        safe_index -= 1
+
+    if safe_index == 0:
+        safe_index = index
+
+    # 避免切断加粗、斜体或代码标记
+    for marker in ("**", "__", "```", "`"):
+        marker_count = text[:safe_index].count(marker)
+        if marker_count % 2 != 0:
+            marker_pos = text.rfind(marker, 0, safe_index)
+            if marker_pos > 0:
+                safe_index = marker_pos
+
+    return max(1, safe_index)
+
+
 def build_html(content="内容文本", decor_emoji=None, decor_position="bottom-right"):
     """构建HTML，用于显示内容文本，处理\n\n作为段落分隔，支持 Markdown 语法"""
-    # 将\n\n分割成段落，过滤空段落
-    # 段落内的单个\n需要转换为<br>标签以便在HTML中换行
+    # 改进段落分割逻辑：正确处理单个 \n 和双 \n\n 的情况
     paragraphs = []
-    for p in content.split('\n\n'):
+    # 使用临时标记来区分段落分隔符和段落内的换行
+    PARAGRAPH_SEPARATOR = '\uE007'  # Unicode 私有使用区字符
+    # 将两个或更多连续换行符替换为段落分隔符
+    content_normalized = re.sub(r'\n{2,}', PARAGRAPH_SEPARATOR, content)
+    # 按段落分隔符分割
+    for p in content_normalized.split(PARAGRAPH_SEPARATOR):
         p = p.strip()
         if p:
-            # 先将段落内的单个\n转换为临时标记，避免被 Markdown 解析影响
-            # 使用一个不太可能出现在文本中的标记
-            p = p.replace('\n', '___BR_TAG___')
-            # 应用 Markdown 解析
-            p = parse_markdown_to_html(p)
-            # 将临时标记转换回 <br> 标签
-            p = p.replace('___BR_TAG___', '<br>')
-            paragraphs.append(p)
+            paragraphs.append(paragraph_to_html(p))
 
     env = Environment(loader=FileSystemLoader(SCRIPT_DIR))
     tpl = env.get_template("content_template.html")
@@ -101,7 +138,7 @@ def build_html(content="内容文本", decor_emoji=None, decor_position="bottom-
         "font_b": to_b64(FONT_CONFIG["font_b"]),
         "font_r": to_b64(FONT_CONFIG["font_r"]),
         "title": "内容图片",
-        "paragraphs": paragraphs,
+        "paragraphs": [paragraph_to_html(p) for p in paragraphs],
         "decor_emoji": decor_emoji,
         "decor_position": decor_position
     }
@@ -162,12 +199,12 @@ def split_content_to_fit(page, paragraphs, max_height=1240):
 
     # 如果一个段落都放不下，处理首段过长的情况：对首段进行“按行”二分拆分
     first = paragraphs[0]
-    if '<br>' in first:
-        parts = [p for p in first.split('<br>') if p.strip()]
+    if '\n' in first:
+        parts = [part for part in first.split('\n') if part.strip()]
         l, r, best_lines = 1, len(parts), 0
         while l <= r:
             m = (l + r) // 2
-            test_para = '<br>'.join(parts[:m])
+            test_para = '\n'.join(parts[:m])
             h = measure_height_for_paragraphs(page, [test_para])
             if h <= max_height:
                 best_lines = m
@@ -175,8 +212,8 @@ def split_content_to_fit(page, paragraphs, max_height=1240):
             else:
                 r = m - 1
         if best_lines > 0:
-            current_paragraphs = ['<br>'.join(parts[:best_lines])]
-            remaining_first = '<br>'.join(parts[best_lines:])
+            current_paragraphs = ['\n'.join(parts[:best_lines])]
+            remaining_first = '\n'.join(parts[best_lines:])
             remaining_paragraphs = ([remaining_first] if remaining_first.strip() else []) + paragraphs[1:]
             return current_paragraphs, remaining_paragraphs
 
@@ -194,8 +231,10 @@ def split_content_to_fit(page, paragraphs, max_height=1240):
     if best_chars == 0:
         # 兜底：至少截取部分字符，避免卡死
         best_chars = max(1, len(text) // 3)
-    current_paragraphs = [text[:best_chars]]
-    remaining_first = text[best_chars:]
+    split_index = find_safe_breakpoint(text, best_chars)
+    current_segment = text[:split_index]
+    remaining_first = text[split_index:]
+    current_paragraphs = [current_segment]
     remaining_paragraphs = ([remaining_first] if remaining_first.strip() else []) + paragraphs[1:]
     return current_paragraphs, remaining_paragraphs
 
@@ -208,11 +247,25 @@ def build_html_from_paragraphs(paragraphs, decor_emoji=None, decor_position="bot
         "font_b": to_b64(FONT_CONFIG["font_b"]),
         "font_r": to_b64(FONT_CONFIG["font_r"]),
         "title": "内容图片",
-        "paragraphs": paragraphs,
+        "paragraphs": [paragraph_to_html(p) for p in paragraphs],
         "decor_emoji": decor_emoji,
         "decor_position": decor_position
     }
     return tpl.render(**cfg)
+
+
+def sanitize_filename(filename: str) -> str:
+    """清理文件名，移除 Windows 非法字符"""
+    # Windows 文件名非法字符：< > : " / \ | ? *
+    illegal_chars = '<>:"/\\|?*'
+    for char in illegal_chars:
+        filename = filename.replace(char, '_')
+    # 移除首尾空格和点号（Windows 不允许）
+    filename = filename.strip(' .')
+    # 如果文件名为空，使用默认名称
+    if not filename:
+        filename = 'untitled'
+    return filename
 
 
 def html_to_pic(page, html, save_path, width=1080, height=1440):
@@ -227,14 +280,13 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="生成内容图片工具")
     parser.add_argument("--content", required=True,
                         help="内容文本")
-    parser.add_argument("--name", required=True,
+    parser.add_argument("--name", default="test",
                         help="输出文件名（不包含扩展名）")
     parser.add_argument("--out", default=str(OUT_DIR),
                         help="输出目录，支持相对路径与绝对路径（默认：项目 out 目录）")
 
     args = parser.parse_args()
 
-    # 处理转义字符：将字符串中的 \n 转换为真正的换行符
     # 将字面字符串 \n 替换为真正的换行符
     content = args.content.replace('\\n', '\n')
 
@@ -244,73 +296,70 @@ if __name__ == "__main__":
         out_dir = ROOT_DIR / out_dir
     out_dir.mkdir(parents=True, exist_ok=True)
 
-    # 将内容转换为段落列表（应用 Markdown 解析）
     paragraphs = []
-    for p in content.split('\n\n'):
+    # 使用临时标记来区分段落分隔符和段落内的换行
+    PARAGRAPH_SEPARATOR = '\uE007'  # Unicode 私有使用区字符
+    content_normalized = re.sub(r'\n{2,}', PARAGRAPH_SEPARATOR, content)
+    # 按段落分隔符分割
+    for p in content_normalized.split(PARAGRAPH_SEPARATOR):
         p = p.strip()
         if p:
-            # 先将段落内的单个\n转换为临时标记，避免被 Markdown 解析影响
-            p = p.replace('\n', '___BR_TAG___')
-            # 应用 Markdown 解析
-            p = parse_markdown_to_html(p)
-            # 将临时标记转换回 <br> 标签
-            p = p.replace('___BR_TAG___', '<br>')
             paragraphs.append(p)
 
     # 可用高度：图片高度1440 - 上下padding 200 = 1240
     MAX_CONTENT_HEIGHT = 1240
-    
+
     # 使用同一个浏览器实例来处理所有操作
     with sync_playwright() as p:
         browser = p.chromium.launch(headless=True)
         page = browser.new_page(viewport={"width": 1080, "height": 1440})
-        
+
         # 生成多张图片
         page_num = 1
         remaining_paragraphs = paragraphs
         max_pages = 100  # 防止死循环的最大页数
-        prev_remaining_count = len(remaining_paragraphs) + 1  # 记录上一次剩余段落数
-        
+
         while remaining_paragraphs and page_num <= max_pages:
-            # 检查是否陷入死循环（剩余段落数没有减少）
-            current_remaining_count = len(remaining_paragraphs)
-            if current_remaining_count >= prev_remaining_count and page_num > 1:
-                # 可能陷入死循环，强制处理剩余内容
-                print(f"⚠️  检测到可能的死循环，强制处理剩余 {current_remaining_count} 个段落")
-                # 强制将所有剩余段落放入当前页
-                current_paragraphs = remaining_paragraphs
-                remaining_paragraphs = []
-            else:
-                # 分割内容，获取当前页的段落和剩余段落
-                current_paragraphs, remaining_paragraphs = split_content_to_fit(
-                    page, remaining_paragraphs, MAX_CONTENT_HEIGHT
-                )
-            
+            # 分割内容，获取当前页的段落和剩余段落
+            current_paragraphs, next_paragraphs = split_content_to_fit(
+                page, remaining_paragraphs, MAX_CONTENT_HEIGHT
+            )
+
             if not current_paragraphs:
                 # 如果连一个段落都放不下，强制放入（避免死循环）
                 if remaining_paragraphs:
                     current_paragraphs = [remaining_paragraphs[0]]
-                    remaining_paragraphs = remaining_paragraphs[1:]
+                    next_paragraphs = remaining_paragraphs[1:]
                 else:
                     # 没有剩余内容了，退出循环
                     break
-            
+
+            remaining_paragraphs = next_paragraphs
+
             # 生成当前页的HTML
             html = build_html_from_paragraphs(current_paragraphs)
-            
-            # 生成文件名
+
+            # 生成文件名（清理非法字符）
+            safe_name = sanitize_filename(args.name)
             if page_num == 1:
-                out_file = out_dir / f"{args.name}.png"
+                out_file = out_dir / f"{safe_name}.png"
             else:
-                out_file = out_dir / f"{args.name}_{page_num}.png"
-            
-            # 生成图片
-            html_to_pic(page, html, out_file)
-            print(f"✅ 内容图片已生成：{out_file} (1080 × 1440) - 第 {page_num} 页")
-            
-            prev_remaining_count = len(remaining_paragraphs)
+                out_file = out_dir / f"{safe_name}_{page_num}.png"
+
+            # 生成图片（添加异常处理）
+            try:
+                html_to_pic(page, html, out_file)
+                # 验证文件是否真的被创建
+                if out_file.exists():
+                    print(f"✅ 内容图片已生成：{out_file} (1080 × 1440) - 第 {page_num} 页")
+                else:
+                    print(f"❌ 图片生成失败：文件未创建 - {out_file}")
+            except Exception as e:
+                print(f"❌ 图片生成失败：{e} - {out_file}")
+                raise  # 重新抛出异常，让程序知道出错了
+
             page_num += 1
-        
+
         browser.close()
-    
+
     print(f"✅ 共生成 {page_num - 1} 张图片")

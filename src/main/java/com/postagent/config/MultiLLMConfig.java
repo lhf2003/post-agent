@@ -14,14 +14,17 @@ public class MultiLLMConfig {
 
     // 模型配置常量 - 默认使用百炼模型
     private static final String WRITING_MODEL = "qwen-plus";
+    private static final String TRANSLATE_MODEL = "qwen-plus";
     private static final String IMAGE_MODEL = "wan2.5-i2i-preview";
 
     // 温度参数常量
     private static final double WRITING_TEMPERATURE = 0.8;
+    private static final double TRANSLATE_TEMPERATURE = 0.1;
     public static final double IMAGE_TEMPERATURE = 0.6;
 
     // Token限制常量
     private static final int WRITING_MAX_TOKENS = 30000;
+    private static final int TRANSLATE_MAX_TOKENS = 1000;
 
     /**
      * 文案助手专用模型 - 擅长文案创作和编辑
@@ -34,6 +37,23 @@ public class MultiLLMConfig {
                         .withModel(WRITING_MODEL)
                         .withTemperature(WRITING_TEMPERATURE)
                         .withMaxToken(WRITING_MAX_TOKENS)
+                        .withEnableThinking(false)
+                        .withEnableSearch(false)
+                        .build())
+                .build();
+    }
+
+    /**
+     * 文案助手专用模型 - 擅长文案创作和编辑
+     */
+    @Bean("translateChatModel")
+    public DashScopeChatModel translateChatModel(DashScopeApi dashScopeApi) {
+        return DashScopeChatModel.builder()
+                .dashScopeApi(dashScopeApi)
+                .defaultOptions(DashScopeChatOptions.builder()
+                        .withModel(TRANSLATE_MODEL)
+                        .withTemperature(TRANSLATE_TEMPERATURE)
+                        .withMaxToken(TRANSLATE_MAX_TOKENS)
                         .withEnableThinking(false)
                         .withEnableSearch(false)
                         .build())
@@ -71,6 +91,14 @@ public class MultiLLMConfig {
     @Bean("writingChatClient")
     public ChatClient writingChatClient(@Qualifier("writingChatModel") DashScopeChatModel writingChatModel) {
         return ChatClient.builder(writingChatModel).defaultAdvisors(new TokenLoggerAdvisor()).build();
+    }
+
+    /**
+     * 翻译助手专用ChatClient
+     */
+    @Bean("translateChatClient")
+    public ChatClient translateChatClient(@Qualifier("translateChatModel") DashScopeChatModel translateChatModel) {
+        return ChatClient.builder(translateChatModel).defaultAdvisors(new TokenLoggerAdvisor()).build();
     }
 
     /**
