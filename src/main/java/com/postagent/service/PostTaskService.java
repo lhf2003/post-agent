@@ -62,6 +62,9 @@ public class PostTaskService {
             PostTaskResult postTaskResult = new PostTaskResult();
             postTaskResult.setTaskId(taskId);
             postTaskResult.setDataId(Long.valueOf(postId));
+            if (targetDir.startsWith("Python script execution failed")) {
+                postTaskResult.setStatus(PostTask.Status.FAILED.getValue());
+            }
             postTaskResult.setStatus(PostTask.Status.SUCCESS.getValue());
             postTaskResult.setDescription(collectedTitle + " 帖子url= " + url);
             postTaskResult.setOutputDirectory(targetDir);
