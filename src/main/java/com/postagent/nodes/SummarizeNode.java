@@ -53,6 +53,11 @@ public class SummarizeNode implements NodeAction {
             throw new IllegalArgumentException("AI output is empty");
         }
 
+        // 向指定文件写入脚本响应（日志）
+        FileWriter writer = new FileWriter(targetDir + File.separator + "result.log", StandardCharsets.UTF_8, true);
+        writer.write(result + "\n");
+        writer.close();
+
         log.info("✅AI输出的小红书文案：\n {}", result);
         return Map.of("summary_content", result);
     }
